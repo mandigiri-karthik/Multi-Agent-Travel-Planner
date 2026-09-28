@@ -19,7 +19,3 @@ conda activate travel
 ``` bash
 pip install -r requirements.txt
 ```
-
-
-
-postgresql://katya:VZcGnAdqKa3jVBy8Hnqg3Rfrw7VDOI1x@dpg-dat8ehvpn0mc73bakck0-a.oregon-postgres.render.com/agentmemory_6kyh
