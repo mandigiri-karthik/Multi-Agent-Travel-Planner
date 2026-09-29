@@ -46,7 +46,7 @@ if not GROQ_API_KEY:
 
 # initialize llm
 llm = ChatGroq(
-    model = "llama-3.3-70b-versatile",
+    model = "openai/gpt-oss-120b",
     api_key = GROQ_API_KEY
 )
 
@@ -57,7 +57,7 @@ class TravelState(TypedDict):
     flight_results : str
     hotel_results : str
     itinerary : str
-    llm_calls : str
+    llm_calls : int
 
 # Agent- 01
 def flight_agent(state: TravelState):
@@ -122,7 +122,7 @@ Flight results : {state['flight_results']}
 
 Hotel results : {state['hotel_results']}
 
-itinerary results : {state['hotel_results']}
+itinerary results : {state['itinerary']}
 
 Format the final answer beautifully using these sections:
 
@@ -140,10 +140,74 @@ Important:
 """
     response = llm.invoke([
         SystemMessage(content = "You are a professional AI travel booking agent"),
-        AIMessage(content = final_response_agent_prompt)
+        HumanMessage(content = final_response_agent_prompt)
     ])
 
     return {
         "message" : [response],
         "llm_calls" : state.get('llm_calls',0)+1
+    }
+
+# Building the graph
+graph = StateGraph(TravelState)
+
+graph.add_node("flight_agent", flight_agent)
+graph.add_node("hotel_agent", hotel_agent)
+graph.add_node("itinerary_agent", itinerary_agent)
+graph.add_node("final_response_agent", final_response_agent)
+
+# building the connection
+graph.add_edge(START, "flight_agent")
+graph.add_edge("flight_agent","hotel_agent")
+graph.add_edge("hotel_agent","itinerary_agent")
+graph.add_edge("itinerary_agent","final_response_agent")
+graph.add_edge("final_response_agent",END)
+
+# postgre checkpointer
+db_url = get_databse_url()
+
+_conn = psycopg.connect(
+    db_url,
+    autocommit = True,
+    row_factory = dict_row
+)
+
+checkpointer = PostgresSaver(_conn)
+checkpointer.setup()
+
+travel_graph = graph.compile(checkpointer=checkpointer)
+
+# function for FASTAPI
+def run_travel_agents(user_input:str, thread_id: str | None=None):
+    if not thread_id:
+        thread_id = f"user_{uuid.uuid4().hex}"
+    
+    config = {
+        "configurable" : {
+            "thread_id" : thread_id
+        }
+    }
+
+    result = travel_graph.invoke(
+        {
+            "message" : [
+                HumanMessage(content=user_input)
+            ],
+            "user_query" : user_input,
+            "flight_results" : "",
+            "hotel_results" : "",
+            "itinerary" :"",
+            "llm_calls" : 0
+        },
+        config = config
+    )
+    final_answer = result["message"][-1].content
+
+    return {
+        "thread_id": thread_id,
+        "answer": final_answer,
+        "flight_results": result.get("flight_results", ""),
+        "hotel_results": result.get("hotel_results", ""),
+        "itinerary": result.get("itinerary", ""),
+        "llm_calls": result.get("llm_calls", 0),
     }

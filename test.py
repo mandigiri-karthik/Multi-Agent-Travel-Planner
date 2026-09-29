@@ -1,6 +1,26 @@
-from tools.tavily_tool import tavily_search
-from tools.flight_tool import search_flights
+from backend import run_travel_agents
 
-# res = tavily_search(query="Best hotels in Glasgow")
-res = search_flights("Plan a 7 days glasgow trip from Banglore")
-print(res)
+user_input = input("Enter travel request: ")
+
+res = run_travel_agents(
+    user_input=user_input,
+    thread_id="user_test"
+)
+
+print("\n FINAL ANSWER ")
+print(res["answer"])
+
+print("\n FLIGHT RESULTS ")
+print(res["flight_results"])
+
+print("\nHOTEL RESULTS ")
+print(res["hotel_results"])
+
+print("\nITINERARY ")
+print(res["itinerary"])
+
+print("\n LLM CALLS ")
+print(res["llm_calls"])
+
+print("\n THREAD ID ")
+print(res["thread_id"])
